@@ -20,28 +20,34 @@ import CursorContainer from '../container';
 
 const CursorWrapperContainer = ({ presenterCursorId, multiUserCursorIds, ...rest }) => (
   <g>
-    {Object.keys(presenterCursorId).length > 0 ?
-      <CursorContainer
-        key={presenterCursorId._id}
-        presenter
-        cursorId={presenterCursorId._id}
-        {...rest}
-      />
-        : null }
+    {Object.keys(presenterCursorId).length > 0
+      ? (
+        <CursorContainer
+          key={presenterCursorId._id}
+          presenter
+          cursorId={presenterCursorId._id}
+          {...rest}
+        />
+      )
+      : null }
 
-    {multiUserCursorIds.map(cursorId =>
-      (<CursorContainer
+    {multiUserCursorIds.map(cursorId => (
+      <CursorContainer
         key={cursorId._id}
         cursorId={cursorId._id}
         presenter={false}
         {...rest}
-      />))}
+      />
+    ))}
   </g>
 );
 
-export default withTracker(() => {
-  const { presenterCursorId, multiUserCursorIds } = CursorWrapperService.getCurrentCursorIds();
-  const isMultiUser = CursorWrapperService.getMultiUserStatus();
+export default withTracker((params) => {
+  const { podId, whiteboardId } = params;
+  const cursorIds = CursorWrapperService.getCurrentCursorIds(podId, whiteboardId);
+  const { presenterCursorId, multiUserCursorIds } = cursorIds;
+
+  const isMultiUser = CursorWrapperService.getMultiUserStatus(whiteboardId);
 
   return {
     presenterCursorId,

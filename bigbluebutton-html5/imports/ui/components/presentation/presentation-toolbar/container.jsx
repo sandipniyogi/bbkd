@@ -1,54 +1,67 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { withTracker } from 'meteor/react-meteor-data';
-import PresentationToolbarService from './service';
+import PresentationService from '/imports/ui/components/presentation/service';
+import MediaService from '/imports/ui/components/media/service';
+import Service from '/imports/ui/components/actions-bar/service';
+import { makeCall } from '/imports/ui/services/api';
 import PresentationToolbar from './component';
+import PresentationToolbarService from './service';
+
+const POLLING_ENABLED = Meteor.settings.public.poll.enabled;
 
 const PresentationToolbarContainer = (props) => {
   const {
-    currentSlideNum,
     userIsPresenter,
-    numberOfSlides,
-    actions,
+    layoutSwapped,
   } = props;
 
-  if (userIsPresenter) {
-    // Only show controls if user is presenter
+  if (userIsPresenter && !layoutSwapped) {
+    // Only show controls if user is presenter and layout isn't swapped
+
     return (
       <PresentationToolbar
-        currentSlideNum={currentSlideNum}
-        numberOfSlides={numberOfSlides}
-        actions={actions}
+        {...props}
       />
     );
   }
   return null;
 };
 
-export default withTracker(({ presentationId, userIsPresenter, currentSlideNum }) => {
-  const data = PresentationToolbarService.getSlideData(presentationId);
-
+export default withTracker((params) => {
   const {
-    numberOfSlides,
-  } = data;
+    podId,
+    presentationId,
+  } = params;
+
+  const startPoll = (type, id) => {
+    Session.set('openPanel', 'poll');
+    Session.set('forcePollOpen', true);
+
+    makeCall('startPoll', type, id);
+  };
 
   return {
-    userIsPresenter,
-    numberOfSlides,
-    actions: {
-      nextSlideHandler: () =>
-        PresentationToolbarService.nextSlide(currentSlideNum, numberOfSlides),
-      previousSlideHandler: () =>
-        PresentationToolbarService.previousSlide(currentSlideNum, numberOfSlides),
-      skipToSlideHandler: event =>
-        PresentationToolbarService.skipToSlide(event),
-    },
+    amIPresenter: Service.amIPresenter(),
+    layoutSwapped: MediaService.getSwapLayout() && MediaService.shouldEnableSwapLayout(),
+    userIsPresenter: PresentationService.isPresenter(podId),
+    numberOfSlides: PresentationToolbarService.getNumberOfSlides(podId, presentationId),
+    nextSlide: PresentationToolbarService.nextSlide,
+    previousSlide: PresentationToolbarService.previousSlide,
+    skipToSlide: PresentationToolbarService.skipToSlide,
+    isMeteorConnected: Meteor.status().connected,
+    isPollingEnabled: POLLING_ENABLED,
+    currentSlidHasContent: PresentationService.currentSlidHasContent(),
+    parseCurrentSlideContent: PresentationService.parseCurrentSlideContent,
+    startPoll,
   };
 })(PresentationToolbarContainer);
 
 PresentationToolbarContainer.propTypes = {
   // Number of current slide being displayed
   currentSlideNum: PropTypes.number.isRequired,
+  zoom: PropTypes.number.isRequired,
+  zoomChanger: PropTypes.func.isRequired,
 
   // Is the user a presenter
   userIsPresenter: PropTypes.bool.isRequired,
@@ -57,9 +70,7 @@ PresentationToolbarContainer.propTypes = {
   numberOfSlides: PropTypes.number.isRequired,
 
   // Actions required for the presenter toolbar
-  actions: PropTypes.shape({
-    nextSlideHandler: PropTypes.func.isRequired,
-    previousSlideHandler: PropTypes.func.isRequired,
-    skipToSlideHandler: PropTypes.func.isRequired,
-  }).isRequired,
+  nextSlide: PropTypes.func.isRequired,
+  previousSlide: PropTypes.func.isRequired,
+  skipToSlide: PropTypes.func.isRequired,
 };

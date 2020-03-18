@@ -1,8 +1,7 @@
 import { check } from 'meteor/check';
 import Logger from '/imports/startup/server/logger';
 import Users from '/imports/api/users';
-
-import userJoin from '../methods/userJoin';
+import userJoin from './userJoin';
 
 const clearOtherSessions = (sessionUserId, current = false) => {
   const serverSessions = Meteor.server.sessions;
@@ -32,7 +31,7 @@ export default function handleValidateAuthToken({ body }, meetingId) {
 
   // Publish user join message
   if (valid && !waitForApproval) {
-    Logger.info('User=', JSON.stringify(User));
+    Logger.info('User=', User);
     userJoin(meetingId, userId, User.authToken);
   }
 
@@ -40,6 +39,8 @@ export default function handleValidateAuthToken({ body }, meetingId) {
     $set: {
       validated: valid,
       approved: !waitForApproval,
+      loginTime: Date.now(),
+      inactivityCheck: false,
     },
   };
 

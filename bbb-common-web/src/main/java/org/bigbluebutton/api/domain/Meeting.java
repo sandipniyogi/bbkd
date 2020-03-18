@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.Lock;
 
 import org.apache.commons.lang3.RandomStringUtils;
 
@@ -61,6 +62,7 @@ public class Meeting {
 	private boolean record;
 	private boolean autoStartRecording = false;
 	private boolean allowStartStopRecording = false;
+	private boolean haveRecordingMarks = false;
 	private boolean webcamsOnlyForModerator = false;
 	private String dialNumber;
 	private String defaultAvatarURL;
@@ -77,6 +79,7 @@ public class Meeting {
 	private String customLogoURL = "";
 	private String customCopyright = "";
 	private Boolean muteOnStart = false;
+	private Boolean allowModsToUnmuteUsers = false;
 
 	private Integer maxInactivityTimeoutMinutes = 120;
 	private Integer warnMinutesBeforeMax = 5;
@@ -85,6 +88,11 @@ public class Meeting {
 	private Integer userInactivityInspectTimerInMinutes = 120;
 	private Integer userInactivityThresholdInMinutes = 30;
     private Integer userActivitySignResponseDelayInMinutes = 5;
+
+	public final BreakoutRoomsParams breakoutRoomsParams;
+	public final LockSettingsParams lockSettingsParams;
+
+	public final Boolean allowDuplicateExtUserid;
 
     public Meeting(Meeting.Builder builder) {
         name = builder.name;
@@ -112,6 +120,9 @@ public class Meeting {
         createdTime = builder.createdTime;
         isBreakout = builder.isBreakout;
         guestPolicy = builder.guestPolicy;
+        breakoutRoomsParams = builder.breakoutRoomsParams;
+        lockSettingsParams = builder.lockSettingsParams;
+		allowDuplicateExtUserid = builder.allowDuplicateExtUserid;
 
         userCustomData = new HashMap<>();
 
@@ -170,6 +181,13 @@ public class Meeting {
 
 	public ConcurrentMap<String, User> getUsersMap() {
 	    return users;
+	}
+
+	public void guestIsWaiting(String userId) {
+		RegisteredUser ruser = registeredUsers.get(userId);
+		if (ruser != null) {
+			ruser.updateGuestWaitedOn();
+		}
 	}
 
 	public void setGuestStatusWithId(String userId, String guestStatus) {
@@ -259,7 +277,15 @@ public class Meeting {
 	public Boolean isBreakout() {
 	  return isBreakout;
 	}
+	
+    public void setHaveRecordingMarks(boolean marks) {
+        haveRecordingMarks = marks;
+    }
 
+    public boolean haveRecordingMarks() {
+        return  haveRecordingMarks;
+    }
+    
 	public String getName() {
 		return name;
 	}
@@ -326,6 +352,11 @@ public class Meeting {
 
 
 	public String calcGuestStatus(String role, Boolean guest, Boolean authned) {
+		// Allow moderators all the time.
+		if (ROLE_MODERATOR.equals(role)) {
+			return GuestPolicy.ALLOW;
+		}
+
 		if (GuestPolicy.ALWAYS_ACCEPT.equals(guestPolicy)) {
 			return GuestPolicy.ALLOW;
 		} else if (GuestPolicy.ALWAYS_DENY.equals(guestPolicy)) {
@@ -410,72 +441,84 @@ public class Meeting {
     	return muteOnStart;
 	}
 
+	public void setAllowModsToUnmuteUsers(Boolean value) {
+		allowModsToUnmuteUsers = value;
+	}
+
+	public Boolean getAllowModsToUnmuteUsers() {
+		return allowModsToUnmuteUsers;
+	}
+
 	public void userJoined(User user) {
 	    userHasJoined = true;
 	    this.users.put(user.getInternalUserId(), user);
 	}
 
 	public User userLeft(String userid){
-		return (User) users.remove(userid);	
+		return users.remove(userid);	
 	}
 
 	public User getUserById(String id){
 		return this.users.get(id);
 	}
 
-	public User getUserWithExternalId(String externalUserId) {
-		for (String key : users.keySet()) {
-			User u = users.get(key);
-			if (u.getExternalUserId().equals(externalUserId)) {
-				return u;
-			}
-		}
-		return null;
-	}
+    public User getUserWithExternalId(String externalUserId) {
+        for (Map.Entry<String, User> entry : users.entrySet()) {
+            User u = entry.getValue();
+            if (u.getExternalUserId().equals(externalUserId)) {
+                return u;
+            }
+        }
+        return null;
+    }
 
+	    
 	public int getNumUsers(){
 		return this.users.size();
 	}
 	
-	public int getNumModerators(){
-		int sum = 0;
-		for (String key : users.keySet()) {
-		    User u =  users.get(key);
-		    if (u.isModerator()) sum++;
-		}
-		return sum;
-	}
+    public int getNumModerators() {
+        int sum = 0;
+        for (Map.Entry<String, User> entry : users.entrySet()) {
+            User u = entry.getValue();
+            if (u.isModerator())
+                sum++;
+        }
+        return sum;
+    }
 	
 	public String getDialNumber() {
 		return dialNumber;
 	}
 
-	public int getNumListenOnly() {
-		int sum = 0;
-		for (String key : users.keySet()) {
-			User u =  users.get(key);
-			if (u.isListeningOnly()) sum++;
-		}
-		return sum;
-	}
+    public int getNumListenOnly() {
+        int sum = 0;
+        for (Map.Entry<String, User> entry : users.entrySet()) {
+            User u = entry.getValue();
+            if (u.isListeningOnly())
+                sum++;
+        }
+        return sum;
+    }
 	
-	public int getNumVoiceJoined() {
-		int sum = 0;
-		for (String key : users.keySet()) {
-			User u =  users.get(key);
-			if (u.isVoiceJoined()) sum++;
-		}
-		return sum;
-	}
+    public int getNumVoiceJoined() {
+        int sum = 0;
+        for (Map.Entry<String, User> entry : users.entrySet()) {
+            User u = entry.getValue();
+            if (u.isVoiceJoined())
+                sum++;
+        }
+        return sum;
+    }
 
-	public int getNumVideos() {
-		int sum = 0;
-		for (String key : users.keySet()) {
-			User u =  users.get(key);
-			sum += u.getStreams().size();
-		}
-		return sum;
-	}
+    public int getNumVideos() {
+        int sum = 0;
+        for (Map.Entry<String, User> entry : users.entrySet()) {
+            User u = entry.getValue();
+            sum += u.getStreams().size();
+        }
+        return sum;
+    }
 	
 	public void addUserCustomData(String userID, Map<String, String> data) {
 		userCustomData.put(userID, data);
@@ -584,6 +627,9 @@ public class Meeting {
     	private long createdTime;
     	private boolean isBreakout;
     	private String guestPolicy;
+    	private BreakoutRoomsParams breakoutRoomsParams;
+    	private LockSettingsParams lockSettingsParams;
+		private Boolean allowDuplicateExtUserid;
 
     	public Builder(String externalId, String internalId, long createTime) {
     		this.externalId = externalId;
@@ -620,7 +666,7 @@ public class Meeting {
     		this.allowStartStopRecording = allow;
     		return this;
     	}
-    	
+    
         public Builder withWebcamsOnlyForModerator(boolean only) {
             this.webcamsOnlyForModerator = only;
             return this;
@@ -699,6 +745,21 @@ public class Meeting {
     	public Builder withGuestPolicy(String policy) {
     		guestPolicy = policy;
     		return  this;
+		}
+
+		public Builder withBreakoutRoomsParams(BreakoutRoomsParams params) {
+    		breakoutRoomsParams = params;
+    		return this;
+		}
+
+		public Builder withLockSettingsParams(LockSettingsParams params) {
+    		lockSettingsParams = params;
+    		return  this;
+		}
+
+		public Builder withAllowDuplicateExtUserid(Boolean allowDuplicateExtUserid) {
+    		this.allowDuplicateExtUserid = allowDuplicateExtUserid;
+    		return this;
 		}
     
     	public Meeting build() {

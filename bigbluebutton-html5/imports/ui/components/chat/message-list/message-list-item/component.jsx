@@ -1,141 +1,127 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
-import { FormattedTime } from 'react-intl';
-import cx from 'classnames';
+import { FormattedTime, defineMessages, injectIntl } from 'react-intl';
 import _ from 'lodash';
-
+import Icon from '/imports/ui/components/icon/component';
 import UserAvatar from '/imports/ui/components/user-avatar/component';
 import Message from './message/component';
 
 import { styles } from './styles';
 
 const propTypes = {
-  user: PropTypes.object,
-  messages: PropTypes.array.isRequired,
+  user: PropTypes.shape({
+    color: PropTypes.string,
+    isModerator: PropTypes.bool,
+    isOnline: PropTypes.bool,
+    name: PropTypes.string,
+  }),
+  messages: PropTypes.arrayOf(Object).isRequired,
   time: PropTypes.number.isRequired,
+  intl: PropTypes.shape({
+    formatMessage: PropTypes.func.isRequired,
+  }).isRequired,
+  scrollArea: PropTypes.instanceOf(Element),
+  chatAreaId: PropTypes.string.isRequired,
+  handleReadMessage: PropTypes.func.isRequired,
+  lastReadMessageTime: PropTypes.number,
 };
 
 const defaultProps = {
+  user: null,
+  scrollArea: null,
+  lastReadMessageTime: 0,
 };
 
-const eventsToBeBound = [
-  'scroll',
-  'resize',
-];
+const intlMessages = defineMessages({
+  offline: {
+    id: 'app.chat.offline',
+    description: 'Offline',
+  },
+  pollResult: {
+    id: 'app.chat.pollResult',
+    description: 'used in place of user name who published poll to chat',
+  },
+  legendTitle: {
+    id: 'app.polling.pollingTitle',
+    description: 'heading for chat poll legend',
+  },
+});
 
-const isElementInViewport = (el) => {
-  const rect = el.getBoundingClientRect();
-  const clientHeight = window.innerHeight || document.documentElement.clientHeight;
-  const prefetchHeight = 125;
+class MessageListItem extends Component {
+  shouldComponentUpdate(nextProps) {
+    const {
+      scrollArea,
+      messages,
+      user,
+      messageId,
+    } = this.props;
 
-  return (
-    rect.top >= -(prefetchHeight) &&
-    rect.bottom <= clientHeight + prefetchHeight
-  );
-};
+    const {
+      scrollArea: nextScrollArea,
+      messages: nextMessages,
+      user: nextUser,
+      messageId: nextMessageId,
+    } = nextProps;
 
-export default class MessageListItem extends Component {
-  constructor(props) {
-    super(props);
+    if (!scrollArea && nextScrollArea) return true;
 
-    this.state = {
-      pendingChanges: false,
-      preventRender: true,
-    };
+    const hasNewMessage = messages.length !== nextMessages.length;
+    const hasIdChanged = messageId !== nextMessageId;
+    const hasUserChanged = user && nextUser
+      && (user.isModerator !== nextUser.isModerator || user.isOnline !== nextUser.isOnline);
 
-    this.handleMessageInViewport = _.debounce(this.handleMessageInViewport.bind(this), 50);
-  }
-
-  handleMessageInViewport() {
-    window.requestAnimationFrame(() => {
-      const node = this.item;
-      this.setState({ preventRender: !isElementInViewport(node) });
-    });
-  }
-
-  componentDidMount() {
-    const { scrollArea } = this.props;
-
-    if (scrollArea) {
-      eventsToBeBound.forEach(
-        (e) => { scrollArea.addEventListener(e, this.handleMessageInViewport, false); },
-      );
-    }
-
-    this.handleMessageInViewport();
-  }
-
-  componentWillUnmount() {
-    const { scrollArea } = this.props;
-
-    if (scrollArea) {
-      eventsToBeBound.forEach(
-        (e) => { scrollArea.removeEventListener(e, this.handleMessageInViewport, false); },
-      );
-    }
-  }
-
-  componentDidUpdate(prevProps, prevState) {
-    if (prevState.preventRender && !this.state.preventRender && this.state.pendingChanges) {
-      this.setState({ pendingChanges: false });
-    }
-  }
-
-  componentWillReceiveProps(nextProps) {
-    if (this.state.pendingChanges) return;
-
-    const hasNewMessage = this.props.messages.length !== nextProps.messages.length;
-    const hasUserChanged = !_.isEqual(this.props.user, nextProps.user);
-
-    this.setState({ pendingChanges: hasNewMessage || hasUserChanged });
-  }
-
-  shouldComponentUpdate(nextProps, nextState) {
-    if(!this.props.scrollArea && nextProps.scrollArea) return true;
-    else return !nextState.preventRender && nextState.pendingChanges;
+    return hasNewMessage || hasIdChanged || hasUserChanged;
   }
 
   renderSystemMessage() {
     const {
       messages,
+      chatAreaId,
+      handleReadMessage,
     } = this.props;
 
     return (
-      <div className={cx(styles.item, styles.systemMessage)}>
-        <div className={styles.content} ref={(ref) => { this.item = ref; }}>
-          <div className={styles.messages}>
-            {messages.map((message, i) => (
-              <Message
-                className={styles.message}
-                key={i}
-                text={message.text}
-                time={message.time}
-                chatAreaId={this.props.chatAreaId}
-                handleReadMessage={this.props.handleReadMessage}
-              />
-            ))}
-          </div>
+      <div className={styles.item}>
+        <div className={styles.messages}>
+          {messages.map(message => (
+            message.text !== ''
+              ? (
+                <Message
+                  className={(message.id ? styles.systemMessage : styles.systemMessageNoBorder)}
+                  key={message.id ? message.id : _.uniqueId('id-')}
+                  text={message.text}
+                  time={message.time}
+                  chatAreaId={chatAreaId}
+                  handleReadMessage={handleReadMessage}
+                />
+              ) : null
+          ))}
         </div>
       </div>
     );
   }
 
-  render() {
+  renderMessageItem() {
     const {
       user,
-      messages,
-      time
+      time,
+      chatAreaId,
+      lastReadMessageTime,
+      handleReadMessage,
+      scrollArea,
+      intl,
+      chats,
     } = this.props;
+
+    if (chats.length < 1) return null;
 
     const dateTime = new Date(time);
 
-    if (!user) {
-      return this.renderSystemMessage();
-    }
+    const regEx = /<a[^>]+>/i;
 
     return (
-      <div className={styles.item}>
-        <div className={styles.wrapper} ref={(ref) => { this.item = ref; }}>
+      <div className={styles.item} key={_.uniqueId('message-list-item-')}>
+        <div className={styles.wrapper}>
           <div className={styles.avatarWrapper}>
             <UserAvatar
               className={styles.avatar}
@@ -149,23 +135,29 @@ export default class MessageListItem extends Component {
             <div className={styles.meta}>
               <div className={user.isOnline ? styles.name : styles.logout}>
                 <span>{user.name}</span>
-                {user.isOnline ? null : <span className={styles.offline}>(offline)</span>}
+                {user.isOnline
+                  ? null
+                  : (
+                    <span className={styles.offline}>
+                      {`(${intl.formatMessage(intlMessages.offline)})`}
+                    </span>
+                  )}
               </div>
               <time className={styles.time} dateTime={dateTime}>
                 <FormattedTime value={dateTime} />
               </time>
             </div>
-            <div className={styles.messages}>
-              {messages.map(message => (
+            <div className={styles.messages} data-test="chatUserMessage">
+              {chats.map(message => (
                 <Message
-                  className={styles.message}
+                  className={(regEx.test(message.text) ? styles.hyperlink : styles.message)}
                   key={message.id}
                   text={message.text}
                   time={message.time}
-                  chatAreaId={this.props.chatAreaId}
-                  lastReadMessageTime={this.props.lastReadMessageTime}
-                  handleReadMessage={this.props.handleReadMessage}
-                  scrollArea={this.props.scrollArea}
+                  chatAreaId={chatAreaId}
+                  lastReadMessageTime={lastReadMessageTime}
+                  handleReadMessage={handleReadMessage}
+                  scrollArea={scrollArea}
                 />
               ))}
             </div>
@@ -174,7 +166,115 @@ export default class MessageListItem extends Component {
       </div>
     );
   }
+
+  renderPollItem() {
+    const {
+      user,
+      time,
+      intl,
+      polls,
+      isDefaultPoll,
+    } = this.props;
+
+    if (polls.length < 1) return null;
+
+    const dateTime = new Date(time);
+
+    let pollText = [];
+    const pollElement = [];
+    const legendElements = [
+      (<div
+        className={styles.optionsTitle}
+        key={_.uniqueId('chat-poll-options-')}
+      >
+        {intl.formatMessage(intlMessages.legendTitle)}
+      </div>),
+    ];
+
+    let isDefault = true;
+    polls.forEach((poll) => {
+      isDefault = isDefaultPoll(poll.text);
+      pollText = poll.text.split('<br/>');
+      pollElement.push(pollText.map((p, index) => {
+        if (!isDefault) {
+          legendElements.push(
+            <div key={_.uniqueId('chat-poll-legend-')} className={styles.pollLegend}>
+              <span>{`${index + 1}: `}</span>
+              <span className={styles.pollOption}>{p.split(':')[0]}</span>
+            </div>,
+          );
+        }
+
+        return (
+          <div key={_.uniqueId('chat-poll-result-')} className={styles.pollLine}>
+            {!isDefault ? p.replace(p.split(':')[0], index + 1) : p}
+          </div>
+        );
+      }));
+    });
+
+    if (!isDefault) {
+      pollElement.push(<div key={_.uniqueId('chat-poll-separator-')} className={styles.divider} />);
+      pollElement.push(legendElements);
+    }
+
+    return polls ? (
+      <div className={styles.item} key={_.uniqueId('message-poll-item-')}>
+        <div className={styles.wrapper} ref={(ref) => { this.item = ref; }}>
+          <div className={styles.avatarWrapper}>
+            <UserAvatar
+              className={styles.avatar}
+              color={user.color}
+              moderator={user.isModerator}
+            >
+              {<Icon className={styles.isPoll} iconName="polling" />}
+            </UserAvatar>
+          </div>
+          <div className={styles.content}>
+            <div className={styles.meta}>
+              <div className={styles.name}>
+                <span>{intl.formatMessage(intlMessages.pollResult)}</span>
+              </div>
+              <time className={styles.time} dateTime={dateTime}>
+                <FormattedTime value={dateTime} />
+              </time>
+            </div>
+            <div className={styles.messages}>
+              {polls[0] ? (
+                <div className={styles.pollWrapper} style={{ borderLeft: `3px ${user.color} solid` }}>
+                  {
+                  pollElement
+                }
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+    ) : null;
+  }
+
+  render() {
+    const {
+      user,
+    } = this.props;
+
+    if (!user) {
+      return this.renderSystemMessage();
+    }
+
+    return (
+      <div className={styles.item}>
+        {[
+          this.renderPollItem(),
+          this.renderMessageItem(),
+        ]}
+      </div>
+    );
+  }
 }
 
 MessageListItem.propTypes = propTypes;
 MessageListItem.defaultProps = defaultProps;
+
+export default injectIntl(MessageListItem);

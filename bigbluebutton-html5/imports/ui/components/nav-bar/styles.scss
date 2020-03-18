@@ -1,8 +1,26 @@
 @import "../../stylesheets/variables/_all";
 
+:root {
+  --mobile-nav-height: 5rem;
+  --mobile-margin-top: .25rem;
+}
+
 .navbar {
   display: flex;
+  flex-direction: column;
+  height:var(--mobile-nav-height);
+}
+
+.top,
+.bottom {
+  display: flex;
   flex-direction: row;
+}
+
+.bottom {
+  @include mq($phone-landscape) {
+    margin-top: var(--mobile-margin-top);
+  }
 }
 
 .left,
@@ -14,35 +32,29 @@
   align-items: center;
 }
 
-.left,
 .right {
   flex: 0;
 }
 
 .center {
-  width:70%;
+  width: 70%;
   flex: 1;
 }
 
 .presentationTitle {
   font-weight: 200;
-  color: $color-white;
-  font-size: $font-size-base;
+  color: var(--color-white);
+  font-size: var(--font-size-base);
   margin: 0;
   padding: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 30vw;
 
   > [class^="icon-bbb-"] {
     font-size: 75%;
   }
-}
-
-.presentationTitleSeparator {
-  color: $color-gray;
-  font-size: $font-size-base;
-  margin: 0 1rem;
 }
 
 .btnWithNotificationDot {
@@ -54,10 +66,10 @@
     border-radius: 50%;
     width: 12px;
     height: 12px;
-    bottom: $border-size;
+    bottom: var(--border-size);
     right: 3px;
-    background-color: $color-danger;
-    border: $border-size solid $color-gray-dark;
+    background-color: var(--color-danger);
+    border: var(--border-size) solid var(--color-gray-dark);
   }
 }
 
@@ -73,15 +85,11 @@
   &:focus {
     span {
       background-color: transparent !important;
-      color: $color-white !important;
+      color: var(--color-white) !important;
       opacity: .75;
     }
   }
 }
 
 .btnSettings {
-}
-
-.dropdownBreakout {
-  cursor: pointer;
 }

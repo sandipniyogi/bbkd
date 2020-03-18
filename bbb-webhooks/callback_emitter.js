@@ -3,7 +3,7 @@ const request = require("request");
 const url = require('url');
 const EventEmitter = require('events').EventEmitter;
 
-const config = require("./config.js");
+const config = require('config');
 const Logger = require("./logger.js");
 const Utils = require("./utils.js");
 
@@ -19,8 +19,7 @@ module.exports = class CallbackEmitter extends EventEmitter {
     this.callbackURL = callbackURL;
     this.message = message;
     this.nextInterval = 0;
-    this.timestap = 0;
-    this.permanent = false;
+    this.timestamp = 0;
     this.permanent = permanent;
   }
 
@@ -39,7 +38,7 @@ module.exports = class CallbackEmitter extends EventEmitter {
           this.emit("failure", error);
 
           // get the next interval we have to wait and schedule a new try
-          const interval = config.hooks.retryIntervals[this.nextInterval];
+          const interval = config.get("hooks.retryIntervals")[this.nextInterval];
           if (interval != null) {
             Logger.warn(`[Emitter] trying the callback again in ${interval/1000.0} secs`);
             this.nextInterval++;
@@ -47,9 +46,9 @@ module.exports = class CallbackEmitter extends EventEmitter {
 
           // no intervals anymore, time to give up
           } else {
-            this.nextInterval = !this.permanent ? 0 : config.hooks.permanentIntervalReset; // Reset interval to permanent hooks
+            this.nextInterval = config.get("hooks.permanentIntervalReset"); // Reset interval to permanent hooks
             if(this.permanent){
-              this._scheduleNext(interval);
+              this._scheduleNext(this.nextInterval);
             }
             else {
               return this.emit("stopped");
@@ -63,11 +62,19 @@ module.exports = class CallbackEmitter extends EventEmitter {
 
   _emitMessage(callback) {
     let data,requestOptions;
-    
-    if (config.bbb.auth2_0) {
-      // Send data as a JSON
-      data = "[" + this.message + "]";
+    const serverDomain = config.get("bbb.serverDomain");
+    const sharedSecret = config.get("bbb.sharedSecret");
+    const bearerAuth = config.get("bbb.auth2_0");
 
+    // data to be sent
+    // note: keep keys in alphabetical order
+    data = {
+      event: "[" + this.message + "]",
+      timestamp: this.timestamp,
+      domain: serverDomain
+    };
+
+    if (bearerAuth) {
       const callbackURL = this.callbackURL;
 
       requestOptions = {
@@ -77,20 +84,13 @@ module.exports = class CallbackEmitter extends EventEmitter {
         method: "POST",
         form: data,
         auth: {
-          bearer: config.bbb.sharedSecret
+          bearer: sharedSecret
         }
       };
     }
     else {
-      // data to be sent
-      // note: keep keys in alphabetical order
-      data = {
-        event: "[" + this.message + "]",
-        timestamp: this.timestamp
-      };
-
       // calculate the checksum
-      const checksum = Utils.checksum(`${this.callbackURL}${JSON.stringify(data)}${config.bbb.sharedSecret}`);
+      const checksum = Utils.checksum(`${this.callbackURL}${JSON.stringify(data)}${sharedSecret}`);
 
       // get the final callback URL, including the checksum
       const urlObj = url.parse(this.callbackURL, true);
@@ -109,7 +109,8 @@ module.exports = class CallbackEmitter extends EventEmitter {
 
     const responseFailed = (response) => {
         var statusCode = (response != null ? response.statusCode : undefined)
-        return !((statusCode >= 200) && (statusCode < 300))
+        // consider 401 as success, because the callback worked but was denied by the recipient
+        return !((statusCode >= 200 && statusCode < 300) || statusCode == 401)
     };
 
     request(requestOptions, function(error, response, body) {

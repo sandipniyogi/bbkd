@@ -38,7 +38,7 @@ public class Png2SwfPageConverter implements PageConverter {
   public boolean convert(File presentationFile, File output, int page, UploadedPresentation pres){		
     String COMMAND = SWFTOOLS_DIR + File.separatorChar + "png2swf -o " + output.getAbsolutePath() + " " + presentationFile.getAbsolutePath();		
 
-    boolean done = new ExternalProcessExecutor().exec(COMMAND, 60000); 	            
+    boolean done = new ExternalProcessExecutor().exec(COMMAND, 10000);
 
     if (done && output.exists()) {
       return true;		
@@ -47,10 +47,11 @@ public class Png2SwfPageConverter implements PageConverter {
       logData.put("meetingId", pres.getMeetingId());
       logData.put("presId", pres.getId());
       logData.put("filename", pres.getName());
+      logData.put("logCode", "png_to_swf_failed");
       logData.put("message", "Failed to convert PNG doc to SWF.");
       Gson gson = new Gson();
       String logStr = gson.toJson(logData);
-      log.warn("-- analytics -- {}", logStr);
+      log.warn(" --analytics-- data={}", logStr);
 
       return false;
     }

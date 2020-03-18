@@ -1,7 +1,7 @@
 import flat from 'flat';
 import { Match, check } from 'meteor/check';
 import Logger from '/imports/startup/server/logger';
-import GroupChatMsg from '/imports/api/group-chat-msg';
+import { GroupChatMsg } from '/imports/api/group-chat-msg';
 import { BREAK_LINE } from '/imports/utils/lineEndings';
 
 const parseMessage = (message) => {
@@ -21,7 +21,7 @@ export default function addGroupChatMsg(meetingId, chatId, msg) {
   check(meetingId, String);
   check(chatId, String);
   check(msg, {
-    id: String,
+    id: Match.Maybe(String),
     timestamp: Number,
     sender: Object,
     color: String,

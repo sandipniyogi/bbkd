@@ -1,70 +1,111 @@
-import React, { Component } from 'react';
+import React, { PureComponent } from 'react';
 import PropTypes from 'prop-types';
 import { styles } from './styles';
-import UserParticipants from './user-participants/component';
+import UserParticipantsContainer from './user-participants/container';
 import UserMessages from './user-messages/component';
+import UserNotesContainer from './user-notes/container';
+import UserCaptionsContainer from './user-captions/container';
+import WaitingUsers from './waiting-users/component';
+import UserPolls from './user-polls/component';
+import BreakoutRoomItem from './breakout-room/component';
 
 const propTypes = {
-  openChats: PropTypes.arrayOf(String).isRequired,
-  users: PropTypes.arrayOf(Object).isRequired,
+  activeChats: PropTypes.arrayOf(String).isRequired,
   compact: PropTypes.bool,
   intl: PropTypes.shape({
     formatMessage: PropTypes.func.isRequired,
   }).isRequired,
   currentUser: PropTypes.shape({}).isRequired,
-  meeting: PropTypes.shape({}),
-  isBreakoutRoom: PropTypes.bool,
-  getAvailableActions: PropTypes.func.isRequired,
-  normalizeEmojiName: PropTypes.func.isRequired,
-  isMeetingLocked: PropTypes.func.isRequired,
   isPublicChat: PropTypes.func.isRequired,
   setEmojiStatus: PropTypes.func.isRequired,
-  assignPresenter: PropTypes.func.isRequired,
-  removeUser: PropTypes.func.isRequired,
-  toggleVoice: PropTypes.func.isRequired,
-  changeRole: PropTypes.func.isRequired,
   roving: PropTypes.func.isRequired,
+  pollIsOpen: PropTypes.bool.isRequired,
+  forcePollOpen: PropTypes.bool.isRequired,
+  requestUserInformation: PropTypes.func.isRequired,
 };
 
 const defaultProps = {
   compact: false,
-  isBreakoutRoom: false,
-  // This one is kinda tricky, meteor takes sometime to fetch the data and passing down
-  // So the first time its create, the meeting comes as null, sending an error to the client.
-  meeting: {},
 };
+const CHAT_ENABLED = Meteor.settings.public.chat.enabled;
+const ROLE_MODERATOR = Meteor.settings.public.user.role_moderator;
 
-class UserContent extends Component {
+class UserContent extends PureComponent {
   render() {
+    const {
+      compact,
+      intl,
+      currentUser,
+      setEmojiStatus,
+      roving,
+      isPublicChat,
+      activeChats,
+      pollIsOpen,
+      forcePollOpen,
+      hasBreakoutRoom,
+      pendingUsers,
+      requestUserInformation,
+    } = this.props;
+
     return (
       <div
         data-test="userListContent"
         className={styles.content}
         role="complementary"
       >
-        <UserMessages
-          isPublicChat={this.props.isPublicChat}
-          openChats={this.props.openChats}
-          compact={this.props.compact}
-          intl={this.props.intl}
-          roving={this.props.roving}
+        {CHAT_ENABLED
+          ? (<UserMessages
+            {...{
+              isPublicChat,
+              activeChats,
+              compact,
+              intl,
+              roving,
+            }}
+          />
+          ) : null
+        }
+        {currentUser.role === ROLE_MODERATOR
+          ? (
+            <UserCaptionsContainer
+              {...{
+                intl,
+              }}
+            />
+          ) : null
+        }
+        <UserNotesContainer
+          {...{
+            intl,
+          }}
         />
-        <UserParticipants
-          users={this.props.users}
-          compact={this.props.compact}
-          intl={this.props.intl}
-          currentUser={this.props.currentUser}
-          meeting={this.props.meeting}
-          isBreakoutRoom={this.props.isBreakoutRoom}
-          setEmojiStatus={this.props.setEmojiStatus}
-          assignPresenter={this.props.assignPresenter}
-          removeUser={this.props.removeUser}
-          toggleVoice={this.props.toggleVoice}
-          changeRole={this.props.changeRole}
-          getAvailableActions={this.props.getAvailableActions}
-          normalizeEmojiName={this.props.normalizeEmojiName}
-          isMeetingLocked={this.props.isMeetingLocked}
-          roving={this.props.roving}
+        {pendingUsers.length > 0 && currentUser.role === ROLE_MODERATOR
+          ? (
+            <WaitingUsers
+              {...{
+                intl,
+                pendingUsers,
+              }}
+            />
+          ) : null
+        }
+        <UserPolls
+          isPresenter={currentUser.presenter}
+          {...{
+            pollIsOpen,
+            forcePollOpen,
+          }}
+        />
+        <BreakoutRoomItem isPresenter={currentUser.presenter} hasBreakoutRoom={hasBreakoutRoom} />
+        <UserParticipantsContainer
+          {...{
+            compact,
+            intl,
+            currentUser,
+            setEmojiStatus,
+            roving,
+            requestUserInformation,
+          }}
         />
       </div>
     );

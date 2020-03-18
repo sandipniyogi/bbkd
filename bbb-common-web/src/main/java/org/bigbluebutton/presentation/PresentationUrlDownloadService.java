@@ -31,7 +31,7 @@ public class PresentationUrlDownloadService {
     private static Logger log = LoggerFactory
             .getLogger(PresentationUrlDownloadService.class);
 
-    private final int maxRedirects = 5;
+    private static final int MAX_REDIRECTS = 5;
     private PageExtractor pageExtractor;
     private DocumentConversionService documentConversionService;
     private String presentationBaseURL;
@@ -59,10 +59,10 @@ public class PresentationUrlDownloadService {
     }
 
     public void processUploadedFile(String podId, String meetingId, String presId,
-            String filename, File presFile, Boolean current) {
+            String filename, File presFile, Boolean current, String authzToken) {
         // TODO add podId
         UploadedPresentation uploadedPres = new UploadedPresentation(podId, meetingId,
-                presId, filename, presentationBaseURL, current);
+                presId, filename, presentationBaseURL, current, authzToken);
         uploadedPres.setUploadedFile(presFile);
         processUploadedPresentation(uploadedPres);
     }
@@ -137,17 +137,15 @@ public class PresentationUrlDownloadService {
             try {
                 FileUtils.copyFile(sourcePresentationFile, newPresentation);
             } catch (IOException e) {
-                log.error("Could not copy presentation {} to {}",
-                        sourcePresentationFile.getAbsolutePath(),
-                        newPresentation.getAbsolutePath());
-                e.printStackTrace();
+                log.error("Could not copy presentation {} to {}", sourcePresentationFile.getAbsolutePath(),
+                        newPresentation.getAbsolutePath(), e);
             }
         }
 
         // Hardcode pre-uploaded presentation for breakout room to the default presentation window
         processUploadedFile("DEFAULT_PRESENTATION_POD", destinationMeetingId, presId, "default-"
                 + presentationSlide.toString() + "." + filenameExt,
-                newPresentation, true);
+                newPresentation, true, "breakout-authz-token");
     }
 
     public String generatePresentationId(String name) {
@@ -171,7 +169,7 @@ public class PresentationUrlDownloadService {
     private String followRedirect(String meetingId, String redirectUrl,
             int redirectCount, String origUrl) {
 
-        if (redirectCount > maxRedirects) {
+        if (redirectCount > MAX_REDIRECTS) {
             log.error("Max redirect reached for meeting=[{}] with url=[{}]",
                     meetingId, origUrl);
             return null;
@@ -181,15 +179,14 @@ public class PresentationUrlDownloadService {
         try {
             presUrl = new URL(redirectUrl);
         } catch (MalformedURLException e) {
-            log.error("Malformed url=[{}] for meeting=[{}]", redirectUrl,
-                    meetingId);
+            log.error("Malformed url=[{}] for meeting=[{}]", redirectUrl, meetingId, e);
             return null;
         }
 
         HttpURLConnection conn;
         try {
             conn = (HttpURLConnection) presUrl.openConnection();
-            conn.setReadTimeout(5000);
+            conn.setReadTimeout(60000);
             conn.addRequestProperty("Accept-Language", "en-US,en;q=0.8");
             conn.addRequestProperty("User-Agent", "Mozilla");
 
@@ -212,8 +209,7 @@ public class PresentationUrlDownloadService {
                 return redirectUrl;
             }
         } catch (IOException e) {
-            log.error("IOException for url=[{}] with meeting[{}]", redirectUrl,
-                    meetingId);
+            log.error("IOException for url=[{}] with meeting[{}]", redirectUrl, meetingId, e);
             return null;
         }
     }
@@ -247,13 +243,17 @@ public class PresentationUrlDownloadService {
             Future<File> future = httpclient.execute(HttpAsyncMethods.createGet(finalUrl), consumer, null);
             File result = future.get();
             success = result.exists();
-        } catch (java.io.FileNotFoundException | java.util.concurrent.ExecutionException | java.lang.InterruptedException ex) {
-
+        } catch (java.lang.InterruptedException ex) {
+            log.error("InterruptedException while saving presentation", meetingId, ex);
+        } catch (java.util.concurrent.ExecutionException ex) {
+            log.error("ExecutionException while saving presentation", meetingId, ex);
+        } catch (java.io.FileNotFoundException ex) {
+            log.error("FileNotFoundException while saving presentation", meetingId, ex);
         } finally {
             try {
                 httpclient.close();
             } catch (java.io.IOException ex) {
-
+                log.error("IOException while saving presentation", meetingId, ex);
             }
         }
 

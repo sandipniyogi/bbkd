@@ -1,63 +1,103 @@
-import React from 'react';
+import React, { PureComponent } from 'react';
 import cx from 'classnames';
 import { styles } from './styles.scss';
-import EmojiSelect from './emoji-select/component';
+import DesktopShare from './desktop-share/component';
 import ActionsDropdown from './actions-dropdown/component';
 import AudioControlsContainer from '../audio/audio-controls/container';
-import JoinVideoOptionsContainer from '../video-provider/video-menu/container';
+import JoinVideoOptionsContainer from '../video-provider/video-button/container';
+import CaptionsButtonContainer from '/imports/ui/components/actions-bar/captions/container';
+import PresentationOptionsContainer from './presentation-options/component';
 
-class ActionsBar extends React.PureComponent {
+class ActionsBar extends PureComponent {
   render() {
     const {
-      isUserPresenter,
-      handleExitVideo,
-      handleJoinVideo,
+      amIPresenter,
       handleShareScreen,
       handleUnshareScreen,
       isVideoBroadcasting,
-      emojiList,
-      emojiSelected,
-      handleEmojiChange,
-      isUserModerator,
-      recordSettingsList,
-      toggleRecording,
+      amIModerator,
+      screenSharingCheck,
+      enableVideo,
+      isLayoutSwapped,
+      toggleSwapLayout,
+      handleTakePresenter,
+      intl,
+      currentSlidHasContent,
+      parseCurrentSlideContent,
+      isSharingVideo,
+      screenShareEndAlert,
+      stopExternalVideoShare,
+      screenshareDataSavingSetting,
+      isCaptionsAvailable,
+      isMeteorConnected,
+      isPollingEnabled,
+      isThereCurrentPresentation,
+      allowExternalVideo,
+      presentations,
+      setPresentation,
+      podIds,
     } = this.props;
 
-    const {
-      allowStartStopRecording,
-      recording: isRecording,
-      record,
-    } = recordSettingsList;
-
     const actionBarClasses = {};
-    actionBarClasses[styles.centerWithActions] = isUserPresenter;
+
+    actionBarClasses[styles.centerWithActions] = amIPresenter;
     actionBarClasses[styles.center] = true;
+    actionBarClasses[styles.mobileLayoutSwapped] = isLayoutSwapped && amIPresenter;
 
     return (
       <div className={styles.actionsbar}>
         <div className={styles.left}>
           <ActionsDropdown {...{
-            isUserPresenter,
+            amIPresenter,
+            amIModerator,
+            isPollingEnabled,
+            allowExternalVideo,
+            handleTakePresenter,
+            intl,
+            isSharingVideo,
+            stopExternalVideoShare,
+            isMeteorConnected,
+            presentations,
+            setPresentation,
+            podIds,
+          }}
+          />
+          {isCaptionsAvailable
+            ? (
+              <CaptionsButtonContainer {...{ intl }} />
+            )
+            : null
+          }
+        </div>
+        <div className={cx(actionBarClasses)}>
+          <AudioControlsContainer />
+          {enableVideo
+            ? (
+              <JoinVideoOptionsContainer />
+            )
+            : null}
+          <DesktopShare {...{
             handleShareScreen,
             handleUnshareScreen,
             isVideoBroadcasting,
-            isUserModerator,
-            allowStartStopRecording,
-            isRecording,
-            record,
-            toggleRecording,
-            }}
+            amIPresenter,
+            screenSharingCheck,
+            screenShareEndAlert,
+            isMeteorConnected,
+            screenshareDataSavingSetting,
+          }}
           />
         </div>
-        <div className={isUserPresenter ? cx(styles.centerWithActions, actionBarClasses) : styles.center}>
-          <AudioControlsContainer />
-          {Meteor.settings.public.kurento.enableVideo ?
-            <JoinVideoOptionsContainer
-              handleJoinVideo={handleJoinVideo}
-              handleCloseVideo={handleExitVideo}
-            />
-            : null}
-          <EmojiSelect options={emojiList} selected={emojiSelected} onChange={handleEmojiChange} />
+        <div className={styles.right}>
+          {isLayoutSwapped
+            ? (
+              <PresentationOptionsContainer
+                toggleSwapLayout={toggleSwapLayout}
+                isThereCurrentPresentation={isThereCurrentPresentation}
+              />
+            )
+            : null
+          }
         </div>
       </div>
     );

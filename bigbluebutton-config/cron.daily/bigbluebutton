@@ -50,26 +50,29 @@ done
 #
 # Delete streams in kurento older than N days
 #
-for app in recording screenshare; do
+for app in recordings screenshare; do
 	app_dir=/var/kurento/$app
 	if [[ -d $app_dir ]]; then
-		find $app_dir -name "*.mkv" -mtime +$history -delete
+		find $app_dir -name "*.mkv" -o -name "*.webm" -mtime +$history -delete
 		find $app_dir -type d -empty -mtime +$history -exec rmdir '{}' +
 	fi
 done
 
 #
-# Delete FreeSWITCH wav recordings older than N days
+# Delete FreeSWITCH wav/opus recordings older than N days
 #
-find /var/freeswitch/meetings/ -name "*.wav" -mtime +$history -delete
+find /var/freeswitch/meetings/ -name "*.wav"  -mtime +$history -delete
+find /var/freeswitch/meetings/ -name "*.opus" -mtime +$history -delete
 
 #
 # Delete old/rotated log files
 #
 find /opt/freeswitch/var/log/freeswitch -type f -mtime +$log_history -delete
 find /var/log/red5 -type f -mtime +$log_history -delete
-find /var/log/tomcat7 -type f -mtime +$log_history -delete
+[[ -d /var/log/tomcat7 ]] && find /var/log/tomcat7 -type f -mtime +$log_history -delete
 find /var/log/bigbluebutton -type f -mtime +$log_history -delete
+find /var/log/bbb-webrtc-sfu -type f -mtime +$log_history -delete
+find /var/log/kurento-media-server -name "*.pid*.log" -type f -mtime +$log_history -delete
 
 #
 # Delete raw files of recordings without recording marks older than N days
